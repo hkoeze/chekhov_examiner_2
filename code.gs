@@ -17,7 +17,7 @@
 // ===========================================
 
 // CONFIGURATION
-const SPREADSHEET_ID = "1Az9LPFedJ6c5qMthY4fKHOSbUyCmpNiEU6gRPIB1dKk";
+const SPREADSHEET_ID = "1UE2yNBbZmTKe4g1C_lVoAvE3RcZAuHGbjEYstDm2xzI";
 const SUBMISSIONS_SHEET = "Database";  // Renamed from Sheet1
 const CONFIG_SHEET = "Config";
 const PROMPTS_SHEET = "Prompts";
