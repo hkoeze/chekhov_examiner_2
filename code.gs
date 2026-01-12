@@ -105,6 +105,8 @@ const STATUS = {
 const DEFAULTS = {
   claude_api_key: "",
   claude_model: "claude-sonnet-4-20250514",
+  gemini_api_key: "",
+  gemini_model: "gemini-2.0-flash",
   max_paper_length: "15000",
   webhook_secret: "default_secret_change_me",
   content_questions_count: "2",
@@ -461,7 +463,8 @@ function getSubmissionBySessionId(sessionId) {
         row: i + 1,
         studentName: data[i][COL.STUDENT_NAME - 1],
         essay: data[i][COL.PAPER - 1],
-        status: data[i][COL.STATUS - 1]
+        status: data[i][COL.STATUS - 1],
+        transcript: data[i][COL.TRANSCRIPT - 1] || ""
       };
     }
   }
@@ -792,20 +795,197 @@ function getMostRecentPendingSubmission() {
 }
 
 // ===========================================
-// CLAUDE GRADING (Phase 4 - placeholder)
+// GEMINI GRADING
 // ===========================================
 
 /**
- * Grades a defense using Claude API
+ * Calls the Gemini API with the given prompt
+ * @param {string} prompt - The full prompt to send
+ * @returns {Object} Parsed response with grade and comments
+ */
+function callGemini(prompt) {
+  const apiKey = getConfig("gemini_api_key");
+  const model = getConfig("gemini_model") || "gemini-2.0-flash";
+
+  if (!apiKey) {
+    throw new Error("Gemini API key not configured. Add 'gemini_api_key' to Config sheet.");
+  }
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+  const payload = {
+    contents: [{
+      parts: [{
+        text: prompt
+      }]
+    }],
+    generationConfig: {
+      temperature: 0.3,  // Lower temperature for more consistent grading
+      maxOutputTokens: 2048
+    }
+  };
+
+  const options = {
+    method: "post",
+    contentType: "application/json",
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  };
+
+  sheetLog("callGemini", "Calling Gemini API", { model: model, promptLength: prompt.length });
+
+  const response = UrlFetchApp.fetch(url, options);
+  const responseCode = response.getResponseCode();
+  const responseText = response.getContentText();
+
+  if (responseCode !== 200) {
+    sheetLog("callGemini", "API Error", { code: responseCode, response: responseText });
+    throw new Error(`Gemini API error (${responseCode}): ${responseText}`);
+  }
+
+  const result = JSON.parse(responseText);
+
+  // Extract the text from Gemini's response
+  const generatedText = result.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
+  sheetLog("callGemini", "API Success", { responseLength: generatedText.length });
+
+  return generatedText;
+}
+
+/**
+ * Parses Gemini's grading response to extract grade and comments
+ * Expects format with scores for each rubric element and a final average
+ * @param {string} response - The raw response from Gemini
+ * @returns {Object} Object with grade (number) and comments (string)
+ */
+function parseGradingResponse(response) {
+  // Try to extract the final grade multiplier
+  // Look for patterns like "Final Score: 0.95" or "final grade multiplier: 0.95"
+  const gradePatterns = [
+    /final\s*(?:score|grade|multiplier)[:\s]*([0-9]+\.?[0-9]*)/i,
+    /average[:\s]*([0-9]+\.?[0-9]*)/i,
+    /([0-9]+\.[0-9]+)\s*(?:final|average|overall)/i
+  ];
+
+  let grade = null;
+  for (const pattern of gradePatterns) {
+    const match = response.match(pattern);
+    if (match) {
+      grade = parseFloat(match[1]);
+      break;
+    }
+  }
+
+  // If no grade found, try to calculate from individual scores
+  if (!grade) {
+    const scoreMatches = response.match(/(?:score|rating)[:\s]*([0-9]+\.?[0-9]*)/gi);
+    if (scoreMatches && scoreMatches.length >= 4) {
+      const scores = scoreMatches.map(m => parseFloat(m.match(/([0-9]+\.?[0-9]*)/)[1]));
+      grade = scores.reduce((a, b) => a + b, 0) / scores.length;
+    }
+  }
+
+  // Default to 1.0 if parsing fails
+  if (!grade || isNaN(grade)) {
+    grade = 1.0;
+    sheetLog("parseGradingResponse", "Could not parse grade, defaulting to 1.0", { response: response.substring(0, 500) });
+  }
+
+  return {
+    grade: Math.round(grade * 100) / 100,  // Round to 2 decimal places
+    comments: response
+  };
+}
+
+/**
+ * Grades a defense using Gemini API
  * @param {string} sessionId - The student's session ID
+ * @returns {Object} Result with success status and grade info
  */
 function gradeDefense(sessionId) {
-  // TODO: Implement in Phase 4
-  // 1. Get paper and transcript using getSubmissionBySessionId(sessionId)
-  // 2. Build prompt from Prompts sheet
-  // 3. Call Claude API
-  // 4. Parse response
-  // 5. Update sheet with grade and comments using updateStudentStatus()
+  try {
+    sheetLog("gradeDefense", "Starting grading", { sessionId: sessionId });
+
+    // 1. Get the submission data
+    const submission = getSubmissionBySessionId(sessionId);
+    if (!submission) {
+      throw new Error("Submission not found for session: " + sessionId);
+    }
+
+    if (!submission.transcript) {
+      throw new Error("No transcript found for session: " + sessionId);
+    }
+
+    // 2. Get prompts from Prompts sheet
+    const systemPrompt = getPrompt("grading_system_prompt");
+    const rubric = getPrompt("grading_rubric");
+
+    // 3. Build the full prompt
+    const fullPrompt = `${systemPrompt}
+
+${rubric}
+
+---
+
+STUDENT NAME: ${submission.studentName}
+
+---
+
+STUDENT ESSAY:
+${submission.essay}
+
+---
+
+ORAL DEFENSE TRANSCRIPT:
+${submission.transcript}
+
+---
+
+Please analyze this oral defense using the rubric above. For each of the 4 criteria, provide:
+1. The score you assign
+2. Brief justification for that score
+
+Then calculate the final average grade multiplier and provide the ~200 word rationale as specified in the rubric.
+
+Format your response with clear headings for each rubric element.`;
+
+    // 4. Call Gemini API
+    const response = callGemini(fullPrompt);
+
+    // 5. Parse the response
+    const parsed = parseGradingResponse(response);
+
+    // 6. Update the sheet
+    const updated = updateStudentStatus(sessionId, STATUS.GRADED, {
+      grade: parsed.grade,
+      comments: parsed.comments
+    });
+
+    if (!updated) {
+      throw new Error("Failed to update student record");
+    }
+
+    sheetLog("gradeDefense", "Grading complete", {
+      sessionId: sessionId,
+      grade: parsed.grade
+    });
+
+    return {
+      success: true,
+      sessionId: sessionId,
+      grade: parsed.grade,
+      comments: parsed.comments
+    };
+
+  } catch (error) {
+    sheetLog("gradeDefense", "ERROR", { sessionId: sessionId, error: error.toString() });
+    return {
+      success: false,
+      sessionId: sessionId,
+      error: error.toString()
+    };
+  }
 }
 
 // ===========================================
