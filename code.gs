@@ -106,7 +106,7 @@ const DEFAULTS = {
   claude_api_key: "",
   claude_model: "claude-sonnet-4-20250514",
   gemini_api_key: "",
-  gemini_model: "gemini-2.0-flash",
+  gemini_model: "gemini-3-flash-preview",
   max_paper_length: "15000",
   webhook_secret: "default_secret_change_me",
   content_questions_count: "2",
@@ -805,7 +805,7 @@ function getMostRecentPendingSubmission() {
  */
 function callGemini(prompt) {
   const apiKey = getConfig("gemini_api_key");
-  const model = getConfig("gemini_model") || "gemini-2.0-flash";
+  const model = getConfig("gemini_model") || "gemini-3-flash-preview";
 
   if (!apiKey) {
     throw new Error("Gemini API key not configured. Add 'gemini_api_key' to Config sheet.");
