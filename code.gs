@@ -821,7 +821,10 @@ function callGemini(prompt) {
     }],
     generationConfig: {
       temperature: 0.3,  // Lower temperature for more consistent grading
-      maxOutputTokens: 2048
+      maxOutputTokens: 2048,
+      thinkingConfig: {
+        thinkingLevel: "medium"  // Options: minimal, low, medium, high
+      }
     }
   };
 
