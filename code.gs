@@ -3,11 +3,17 @@
 // ===========================================
 // This script handles:
 // 1. Serving the student submission portal
-// 2. Processing paper submissions
-// 3. Providing essay lookup for 11Labs agent
-// 4. Providing randomized questions for 11Labs agent
-// 5. Receiving transcripts via webhook
-// 6. Grading via Claude API
+// 2. Processing paper submissions (generates UUID session_id)
+// 3. Providing randomized questions for 11Labs agent
+// 4. Receiving transcripts via webhook (matched by session_id)
+// 5. Grading via Claude API (Phase 4)
+//
+// Workflow:
+// - Student submits essay via portal -> gets session_id
+// - Portal configures 11Labs widget with session_id
+// - Student has voice defense, pastes essay in chat
+// - 11Labs sends transcript webhook with session_id
+// - System matches transcript to submission, stores for grading
 // ===========================================
 
 // CONFIGURATION
@@ -71,7 +77,7 @@ function clearLogs() {
 const COL = {
   TIMESTAMP: 1,
   STUDENT_NAME: 2,
-  CODE: 3,
+  SESSION_ID: 3,  // Changed from CODE - now stores UUID for webhook correlation
   PAPER: 4,
   STATUS: 5,
   DEFENSE_STARTED: 6,
@@ -80,7 +86,8 @@ const COL = {
   CLAUDE_GRADE: 9,
   CLAUDE_COMMENTS: 10,
   INSTRUCTOR_NOTES: 11,
-  FINAL_GRADE: 12
+  FINAL_GRADE: 12,
+  CONVERSATION_ID: 13  // New: stores 11Labs conversation_id as backup
 };
 
 // Status values
@@ -260,11 +267,6 @@ function doGet(e) {
   console.log("=== doGet called ===");
   console.log("Action:", action || "none (serving portal)");
 
-  // API endpoint for 11Labs to fetch essays
-  if (action === "getEssay") {
-    return handleGetEssay(e);
-  }
-
   // API endpoint for 11Labs to fetch randomized questions
   if (action === "getQuestions") {
     return handleGetQuestions(e);
@@ -322,7 +324,7 @@ function doPost(e) {
 /**
  * Processes a paper submission from the portal
  * @param {Object} formObject - Contains name and essay fields
- * @returns {Object} Status and code or error message
+ * @returns {Object} Status and session_id or error message
  */
 function processSubmission(formObject) {
   try {
@@ -338,160 +340,46 @@ function processSubmission(formObject) {
       };
     }
 
-    // Generate a unique code
-    const code = generateUniqueCode(sheet);
+    // Generate a unique session ID (UUID)
+    const sessionId = generateSessionId();
 
     // Create row with all columns (empty strings for unused columns)
-    const newRow = new Array(12).fill("");
+    const newRow = new Array(13).fill("");
     newRow[COL.TIMESTAMP - 1] = new Date();
     newRow[COL.STUDENT_NAME - 1] = formObject.name;
-    newRow[COL.CODE - 1] = code;
+    newRow[COL.SESSION_ID - 1] = sessionId;
     newRow[COL.PAPER - 1] = formObject.essay;
     newRow[COL.STATUS - 1] = STATUS.SUBMITTED;
 
     sheet.appendRow(newRow);
 
-    return { status: "success", code: code };
+    sheetLog("processSubmission", "Essay submitted", {
+      studentName: formObject.name,
+      sessionId: sessionId,
+      essayLength: formObject.essay.length
+    });
+
+    return { status: "success", sessionId: sessionId };
 
   } catch (e) {
+    sheetLog("processSubmission", "ERROR", e.toString());
     return { status: "error", message: e.toString() };
   }
 }
 
 /**
- * Generates a unique 4-digit code not already in use
- * @param {Sheet} sheet - The submissions sheet
- * @returns {string} A unique 4-digit code
+ * Generates a unique session ID (UUID v4 format)
+ * Used to correlate portal submissions with 11Labs webhook callbacks
+ * @returns {string} A UUID string
  */
-function generateUniqueCode(sheet) {
-  const lastRow = sheet.getLastRow();
-  const existingCodes = new Set();
-
-  if (lastRow > 1) { // Skip header row
-    const codeColumn = sheet.getRange(2, COL.CODE, lastRow - 1, 1).getValues();
-    codeColumn.forEach(row => {
-      if (row[0]) existingCodes.add(row[0].toString());
-    });
-  }
-
-  let code;
-  let attempts = 0;
-  const maxAttempts = 100;
-
-  do {
-    code = Math.floor(1000 + Math.random() * 9000).toString();
-    attempts++;
-    if (attempts > maxAttempts) {
-      throw new Error("Unable to generate unique code after " + maxAttempts + " attempts");
-    }
-  } while (existingCodes.has(code));
-
-  return code;
-}
-
-// ===========================================
-// 11LABS ESSAY LOOKUP (GET endpoint)
-// ===========================================
-
-/**
- * Handles essay lookup requests from 11Labs agent
- * GET ?action=getEssay&code=1234&secret=xxx
- */
-function handleGetEssay(e) {
-  try {
-    const code = e?.parameter?.code;
-    const providedSecret = e?.parameter?.secret;
-    const expectedSecret = getConfig("webhook_secret");
-
-    // Log all incoming parameters to spreadsheet for debugging
-    sheetLog("handleGetEssay", "Request received", {
-      allParams: e?.parameter,
-      code: code,
-      codeType: typeof code,
-      codeLength: code ? code.length : "N/A",
-      codeCharCodes: code ? code.split('').map(c => c.charCodeAt(0)).join(',') : "N/A"
-    });
-
-    // Validate secret
-    if (providedSecret !== expectedSecret) {
-      sheetLog("handleGetEssay", "SECRET FAILED", {
-        provided: providedSecret ? providedSecret.substring(0, 4) + "..." : "none",
-        expected: expectedSecret ? expectedSecret.substring(0, 4) + "..." : "none"
-      });
-      return ContentService.createTextOutput(JSON.stringify({
-        success: false,
-        error: "Invalid secret"
-      })).setMimeType(ContentService.MimeType.JSON);
-    }
-    sheetLog("handleGetEssay", "Secret OK", "");
-
-    // Validate code provided
-    if (!code) {
-      sheetLog("handleGetEssay", "ERROR: No code provided", "");
-      return ContentService.createTextOutput(JSON.stringify({
-        success: false,
-        error: "No code provided"
-      })).setMimeType(ContentService.MimeType.JSON);
-    }
-
-    // Look up the essay
-    sheetLog("handleGetEssay", "Looking up code", code);
-    const result = getEssayByCode(code);
-
-    if (!result) {
-      sheetLog("handleGetEssay", "CODE NOT FOUND", { searchedFor: code });
-      return ContentService.createTextOutput(JSON.stringify({
-        success: false,
-        error: "Code not found. Please check the code and try again."
-      })).setMimeType(ContentService.MimeType.JSON);
-    }
-
-    sheetLog("handleGetEssay", "Found student", {
-      name: result.studentName,
-      status: result.status,
-      row: result.row
-    });
-
-    // Allow essay retrieval during active defense (for retries/reconnections)
-    // But reject if defense is already complete or graded
-    if (result.status !== STATUS.SUBMITTED && result.status !== STATUS.DEFENSE_STARTED) {
-      sheetLog("handleGetEssay", "INVALID STATUS", {
-        code: code,
-        status: result.status
-      });
-      return ContentService.createTextOutput(JSON.stringify({
-        success: false,
-        error: "This code has already been used for a defense."
-      })).setMimeType(ContentService.MimeType.JSON);
-    }
-
-    // Only update status if this is the first call (status is still Submitted)
-    if (result.status === STATUS.SUBMITTED) {
-      sheetLog("handleGetEssay", "Updating to Defense Started", code);
-      updateStudentStatus(code, STATUS.DEFENSE_STARTED, { defenseStarted: new Date() });
-    }
-
-    const wordCount = result.essay.split(/\s+/).length;
-    sheetLog("handleGetEssay", "SUCCESS - returning essay", {
-      code: code,
-      student: result.studentName,
-      wordCount: wordCount
-    });
-
-    return ContentService.createTextOutput(JSON.stringify({
-      success: true,
-      studentName: result.studentName,
-      essay: result.essay,
-      wordCount: wordCount
-    })).setMimeType(ContentService.MimeType.JSON);
-
-  } catch (error) {
-    sheetLog("handleGetEssay", "EXCEPTION", error.toString());
-    return ContentService.createTextOutput(JSON.stringify({
-      success: false,
-      error: error.toString()
-    })).setMimeType(ContentService.MimeType.JSON);
-  }
+function generateSessionId() {
+  // Generate UUID v4 format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
+  const template = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx';
+  return template.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
 }
 
 // ===========================================
@@ -548,34 +436,29 @@ function handleGetQuestions(e) {
 }
 
 /**
- * Looks up an essay by its defense code
- * @param {string} code - The 4-digit defense code
+ * Looks up a submission by its session ID
+ * @param {string} sessionId - The UUID session ID
  * @returns {Object|null} Student data or null if not found
  */
-function getEssayByCode(code) {
+function getSubmissionBySessionId(sessionId) {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = ss.getSheetByName(SUBMISSIONS_SHEET);
   const data = sheet.getDataRange().getValues();
 
-  // Normalize the search code (trim whitespace, convert to string)
-  const searchCode = code.toString().trim();
-
-  // Collect all existing codes for debugging
-  const existingCodes = [];
+  const searchId = sessionId.toString().trim();
 
   // Skip header row
   for (let i = 1; i < data.length; i++) {
-    const rowCode = data[i][COL.CODE - 1]?.toString().trim() || "";
-    existingCodes.push(rowCode);
+    const rowSessionId = data[i][COL.SESSION_ID - 1]?.toString().trim() || "";
 
-    if (rowCode === searchCode) {
-      sheetLog("getEssayByCode", "MATCH FOUND", {
+    if (rowSessionId === searchId) {
+      sheetLog("getSubmissionBySessionId", "MATCH FOUND", {
         row: i + 1,
-        code: rowCode,
+        sessionId: rowSessionId,
         student: data[i][COL.STUDENT_NAME - 1]
       });
       return {
-        row: i + 1, // 1-based row number
+        row: i + 1,
         studentName: data[i][COL.STUDENT_NAME - 1],
         essay: data[i][COL.PAPER - 1],
         status: data[i][COL.STATUS - 1]
@@ -583,36 +466,69 @@ function getEssayByCode(code) {
     }
   }
 
-  // No match found - log all existing codes to spreadsheet for debugging
-  const nearMatches = existingCodes.filter(ec =>
-    ec.includes(searchCode) || searchCode.includes(ec)
-  );
-
-  sheetLog("getEssayByCode", "NO MATCH FOUND", {
-    searchedFor: searchCode,
-    searchLength: searchCode.length,
-    searchCharCodes: searchCode.split('').map(c => c.charCodeAt(0)).join(','),
-    totalCodesInDB: existingCodes.length,
-    existingCodes: existingCodes.join(", "),
-    nearMatches: nearMatches.length > 0 ? nearMatches.join(", ") : "none"
-  });
-
+  sheetLog("getSubmissionBySessionId", "NO MATCH FOUND", { searchedFor: searchId });
   return null;
 }
 
 /**
+ * Looks up a submission by student name (fallback method)
+ * Returns the most recent submission with matching name and valid status
+ * @param {string} name - The student's name
+ * @returns {Object|null} Student data or null if not found
+ */
+function getSubmissionByName(name) {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(SUBMISSIONS_SHEET);
+  const data = sheet.getDataRange().getValues();
+
+  const searchName = name.toString().trim().toLowerCase();
+  let bestMatch = null;
+
+  // Skip header row, find most recent matching submission
+  for (let i = 1; i < data.length; i++) {
+    const rowName = data[i][COL.STUDENT_NAME - 1]?.toString().trim().toLowerCase() || "";
+    const status = data[i][COL.STATUS - 1];
+
+    // Only match submissions that are awaiting defense or in progress
+    if (rowName === searchName &&
+        (status === STATUS.SUBMITTED || status === STATUS.DEFENSE_STARTED)) {
+      bestMatch = {
+        row: i + 1,
+        sessionId: data[i][COL.SESSION_ID - 1],
+        studentName: data[i][COL.STUDENT_NAME - 1],
+        essay: data[i][COL.PAPER - 1],
+        status: status
+      };
+      // Don't break - continue to find most recent (last in sheet)
+    }
+  }
+
+  if (bestMatch) {
+    sheetLog("getSubmissionByName", "MATCH FOUND", {
+      row: bestMatch.row,
+      student: bestMatch.studentName,
+      sessionId: bestMatch.sessionId
+    });
+  } else {
+    sheetLog("getSubmissionByName", "NO MATCH FOUND", { searchedFor: name });
+  }
+
+  return bestMatch;
+}
+
+/**
  * Updates a student's status and optional fields
- * @param {string} code - The defense code
+ * @param {string} sessionId - The session ID (UUID)
  * @param {string} newStatus - The new status value
  * @param {Object} additionalFields - Optional fields to update
  */
-function updateStudentStatus(code, newStatus, additionalFields = {}) {
+function updateStudentStatus(sessionId, newStatus, additionalFields = {}) {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = ss.getSheetByName(SUBMISSIONS_SHEET);
   const data = sheet.getDataRange().getValues();
 
   for (let i = 1; i < data.length; i++) {
-    if (data[i][COL.CODE - 1].toString() === code.toString()) {
+    if (data[i][COL.SESSION_ID - 1]?.toString() === sessionId.toString()) {
       const row = i + 1;
 
       // Update status
@@ -634,10 +550,21 @@ function updateStudentStatus(code, newStatus, additionalFields = {}) {
       if (additionalFields.comments) {
         sheet.getRange(row, COL.CLAUDE_COMMENTS).setValue(additionalFields.comments);
       }
+      if (additionalFields.conversationId) {
+        sheet.getRange(row, COL.CONVERSATION_ID).setValue(additionalFields.conversationId);
+      }
+
+      sheetLog("updateStudentStatus", "Updated", {
+        sessionId: sessionId,
+        newStatus: newStatus,
+        row: row
+      });
 
       return true;
     }
   }
+
+  sheetLog("updateStudentStatus", "NOT FOUND", { sessionId: sessionId });
   return false;
 }
 
@@ -647,7 +574,7 @@ function updateStudentStatus(code, newStatus, additionalFields = {}) {
 
 /**
  * Handles incoming transcript webhooks from 11Labs
- * Expected payload format:
+ * Expected payload format (matches Get Conversation API response):
  * {
  *   "type": "post_call_transcription",
  *   "event_timestamp": 1739537297,
@@ -657,64 +584,116 @@ function updateStudentStatus(code, newStatus, additionalFields = {}) {
  *     "status": "done",
  *     "transcript": [
  *       { "role": "agent", "message": "Hello..." },
- *       { "role": "user", "message": "My code is 1234" }
- *     ]
+ *       { "role": "user", "message": "..." }
+ *     ],
+ *     "conversation_initiation_client_data": {
+ *       "dynamic_variables": {
+ *         "session_id": "uuid-here"
+ *       }
+ *     }
  *   }
  * }
  */
 function handleTranscriptWebhook(payload) {
   try {
-    console.log("=== Transcript Webhook Received ===");
-    console.log("Payload type:", payload.type);
+    sheetLog("handleTranscriptWebhook", "Webhook received", {
+      type: payload.type,
+      hasData: !!payload.data
+    });
 
     // Extract data from 11Labs webhook payload
     const data = payload.data || payload;
     const transcriptArray = data.transcript || [];
     const conversationId = data.conversation_id || "";
 
-    console.log("Conversation ID:", conversationId);
-    console.log("Transcript entries:", transcriptArray.length);
+    // Extract session_id from dynamic_variables (primary method)
+    const clientData = data.conversation_initiation_client_data || {};
+    const dynamicVars = clientData.dynamic_variables || {};
+    let sessionId = dynamicVars.session_id || null;
+
+    sheetLog("handleTranscriptWebhook", "Extracted data", {
+      conversationId: conversationId,
+      transcriptEntries: transcriptArray.length,
+      sessionId: sessionId,
+      hasDynamicVars: Object.keys(dynamicVars).length > 0
+    });
 
     // Convert transcript array to readable string
     const transcriptText = formatTranscript(transcriptArray);
 
-    // Extract the defense code from the transcript
-    const code = extractCodeFromTranscript(transcriptText);
-    console.log("Extracted code from transcript:", code);
+    // Try to find the submission record
+    let submission = null;
+    let matchMethod = "";
 
-    if (!code) {
-      // Log the payload for debugging
-      console.log("ERROR: No code found in transcript");
-      console.log("Transcript text:", transcriptText.substring(0, 500) + "...");
+    // Method 1: Match by session_id from dynamic_variables
+    if (sessionId) {
+      submission = getSubmissionBySessionId(sessionId);
+      if (submission) matchMethod = "session_id";
+    }
+
+    // Method 2: Fallback - try to extract student name from transcript and match
+    if (!submission) {
+      const studentName = extractStudentNameFromTranscript(transcriptText);
+      if (studentName) {
+        submission = getSubmissionByName(studentName);
+        if (submission) {
+          matchMethod = "name_fallback";
+          sessionId = submission.sessionId;
+        }
+      }
+    }
+
+    // Method 3: Last resort - find most recent "SUBMITTED" or "DEFENSE_STARTED" record
+    if (!submission) {
+      submission = getMostRecentPendingSubmission();
+      if (submission) {
+        matchMethod = "most_recent_fallback";
+        sessionId = submission.sessionId;
+      }
+    }
+
+    if (!submission) {
+      sheetLog("handleTranscriptWebhook", "NO MATCH FOUND", {
+        conversationId: conversationId,
+        attemptedSessionId: dynamicVars.session_id
+      });
       return ContentService.createTextOutput(JSON.stringify({
         success: false,
-        error: "Could not determine student code from transcript",
+        error: "Could not find matching student submission",
         conversation_id: conversationId
       })).setMimeType(ContentService.MimeType.JSON);
     }
 
+    sheetLog("handleTranscriptWebhook", "MATCH FOUND", {
+      matchMethod: matchMethod,
+      sessionId: sessionId,
+      studentName: submission.studentName
+    });
+
     // Update the student record
-    const updated = updateStudentStatus(code, STATUS.DEFENSE_COMPLETE, {
+    const updated = updateStudentStatus(sessionId, STATUS.DEFENSE_COMPLETE, {
+      defenseStarted: submission.status === STATUS.SUBMITTED ? new Date() : null,
       defenseEnded: new Date(),
-      transcript: transcriptText
+      transcript: transcriptText,
+      conversationId: conversationId
     });
 
     if (!updated) {
       return ContentService.createTextOutput(JSON.stringify({
         success: false,
-        error: "Could not find student with code: " + code
+        error: "Could not update student record for session: " + sessionId
       })).setMimeType(ContentService.MimeType.JSON);
     }
 
-    // Optionally trigger grading immediately
-    // gradeDefense(code);
-
     return ContentService.createTextOutput(JSON.stringify({
       success: true,
-      message: "Transcript saved for code: " + code
+      message: "Transcript saved",
+      session_id: sessionId,
+      match_method: matchMethod
     })).setMimeType(ContentService.MimeType.JSON);
 
   } catch (error) {
+    sheetLog("handleTranscriptWebhook", "EXCEPTION", error.toString());
     return ContentService.createTextOutput(JSON.stringify({
       success: false,
       error: error.toString()
@@ -739,36 +718,77 @@ function formatTranscript(transcriptArray) {
 }
 
 /**
- * Attempts to extract the defense code from transcript text
- * Looks for 4-digit codes, prioritizing those near "code" mentions
+ * Attempts to extract the student's name from transcript
+ * Looks for common patterns like "my name is X" or "I'm X"
  * @param {string} transcript - The conversation transcript
- * @returns {string|null} The extracted code or null
+ * @returns {string|null} The extracted name or null
  */
-function extractCodeFromTranscript(transcript) {
-  // First, try to find a code mentioned near the word "code"
-  const codeContextMatch = transcript.match(/code[^\d]*(\d{4})\b/i);
-  if (codeContextMatch) {
-    return codeContextMatch[1];
-  }
-
-  // Fallback: find any 4-digit number in student responses
+function extractStudentNameFromTranscript(transcript) {
+  // Look for common name introduction patterns in student lines
   const studentLines = transcript.split('\n')
-    .filter(line => line.startsWith('STUDENT:'));
+    .filter(line => line.startsWith('STUDENT:'))
+    .join(' ');
 
-  for (const line of studentLines) {
-    const match = line.match(/\b(\d{4})\b/);
+  // Pattern: "my name is [Name]" or "I'm [Name]" or "I am [Name]"
+  const patterns = [
+    /my name is ([A-Z][a-z]+ [A-Z][a-z]+)/i,
+    /my name is ([A-Z][a-z]+)/i,
+    /I'm ([A-Z][a-z]+ [A-Z][a-z]+)/i,
+    /I am ([A-Z][a-z]+ [A-Z][a-z]+)/i,
+    /this is ([A-Z][a-z]+ [A-Z][a-z]+)/i
+  ];
+
+  for (const pattern of patterns) {
+    const match = studentLines.match(pattern);
     if (match) {
-      return match[0];
+      return match[1].trim();
     }
   }
 
-  // Last resort: any 4-digit number in the transcript
-  const matches = transcript.match(/\b(\d{4})\b/g);
-  if (matches && matches.length > 0) {
-    return matches[0];
+  return null;
+}
+
+/**
+ * Gets the most recent submission that's awaiting defense
+ * Used as a last-resort fallback when session_id matching fails
+ * @returns {Object|null} The most recent pending submission or null
+ */
+function getMostRecentPendingSubmission() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(SUBMISSIONS_SHEET);
+  const data = sheet.getDataRange().getValues();
+
+  let mostRecent = null;
+  let mostRecentTime = null;
+
+  // Skip header row
+  for (let i = 1; i < data.length; i++) {
+    const status = data[i][COL.STATUS - 1];
+    const timestamp = data[i][COL.TIMESTAMP - 1];
+
+    if (status === STATUS.SUBMITTED || status === STATUS.DEFENSE_STARTED) {
+      const rowTime = new Date(timestamp).getTime();
+      if (!mostRecentTime || rowTime > mostRecentTime) {
+        mostRecentTime = rowTime;
+        mostRecent = {
+          row: i + 1,
+          sessionId: data[i][COL.SESSION_ID - 1],
+          studentName: data[i][COL.STUDENT_NAME - 1],
+          essay: data[i][COL.PAPER - 1],
+          status: status
+        };
+      }
+    }
   }
 
-  return null;
+  if (mostRecent) {
+    sheetLog("getMostRecentPendingSubmission", "Found", {
+      sessionId: mostRecent.sessionId,
+      studentName: mostRecent.studentName
+    });
+  }
+
+  return mostRecent;
 }
 
 // ===========================================
@@ -777,15 +797,15 @@ function extractCodeFromTranscript(transcript) {
 
 /**
  * Grades a defense using Claude API
- * @param {string} code - The student's defense code
+ * @param {string} sessionId - The student's session ID
  */
-function gradeDefense(code) {
+function gradeDefense(sessionId) {
   // TODO: Implement in Phase 4
-  // 1. Get paper and transcript
+  // 1. Get paper and transcript using getSubmissionBySessionId(sessionId)
   // 2. Build prompt from Prompts sheet
   // 3. Call Claude API
   // 4. Parse response
-  // 5. Update sheet with grade and comments
+  // 5. Update sheet with grade and comments using updateStudentStatus()
 }
 
 // ===========================================
@@ -811,8 +831,8 @@ function gradeAllPending() {
 
   for (let i = 1; i < data.length; i++) {
     if (data[i][COL.STATUS - 1] === STATUS.DEFENSE_COMPLETE) {
-      const code = data[i][COL.CODE - 1].toString();
-      gradeDefense(code);
+      const sessionId = data[i][COL.SESSION_ID - 1].toString();
+      gradeDefense(sessionId);
     }
   }
 }

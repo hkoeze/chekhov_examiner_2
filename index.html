@@ -2,247 +2,584 @@
 <html>
   <head>
     <base target="_top">
-    <!-- Using a simple font and clean CSS for a minimalist academic look -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
+      * {
+        box-sizing: border-box;
+      }
+
       body {
-        font-family: 'Inter', sans-serif;
-        background-color: #f4f4f9;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        margin: 0;
+        padding: 20px;
         display: flex;
         justify-content: center;
         align-items: center;
-        min-height: 100vh;
-        margin: 0;
-        color: #333;
       }
 
       .container {
         background: white;
-        padding: 40px;
-        border-radius: 12px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+        border-radius: 16px;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
         width: 100%;
-        max-width: 600px;
+        max-width: 640px;
+        overflow: hidden;
       }
 
-      h1 {
-        margin-top: 0;
-        font-weight: 600;
-        color: #1a1a1a;
+      .header {
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        color: white;
+        padding: 32px 40px;
         text-align: center;
-        margin-bottom: 30px;
       }
 
+      .header h1 {
+        margin: 0 0 8px 0;
+        font-size: 1.75rem;
+        font-weight: 700;
+        letter-spacing: -0.5px;
+      }
+
+      .header p {
+        margin: 0;
+        opacity: 0.8;
+        font-size: 0.95rem;
+        font-weight: 400;
+      }
+
+      .content {
+        padding: 40px;
+      }
+
+      /* Form Styles */
       .form-group {
-        margin-bottom: 20px;
+        margin-bottom: 24px;
       }
 
       label {
         display: block;
-        font-size: 0.9em;
+        font-size: 0.875rem;
         font-weight: 600;
+        color: #374151;
         margin-bottom: 8px;
-        color: #555;
       }
 
       input[type="text"] {
         width: 100%;
-        padding: 12px;
-        border: 1px solid #ddd;
-        border-radius: 6px;
-        font-size: 16px;
-        box-sizing: border-box; /* Ensures padding doesn't affect width */
+        padding: 14px 16px;
+        border: 2px solid #e5e7eb;
+        border-radius: 10px;
+        font-size: 1rem;
+        font-family: inherit;
+        transition: all 0.2s ease;
+      }
+
+      input[type="text"]:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
       }
 
       textarea {
         width: 100%;
-        padding: 12px;
-        border: 1px solid #ddd;
-        border-radius: 6px;
-        font-size: 14px;
-        line-height: 1.5;
+        padding: 14px 16px;
+        border: 2px solid #e5e7eb;
+        border-radius: 10px;
+        font-size: 0.95rem;
+        font-family: inherit;
+        line-height: 1.6;
         resize: vertical;
-        box-sizing: border-box;
-        font-family: 'Inter', sans-serif;
+        min-height: 200px;
+        transition: all 0.2s ease;
       }
 
-      textarea:focus, input:focus {
+      textarea:focus {
         outline: none;
-        border-color: #4a90e2;
-        box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+        border-color: #667eea;
+        box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
       }
 
-      button {
-        width: 100%;
-        background-color: #1a1a1a;
-        color: white;
-        padding: 15px;
-        border: none;
-        border-radius: 6px;
-        font-size: 16px;
+      .char-count {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 8px;
+        font-size: 0.8rem;
+        color: #6b7280;
+      }
+
+      .char-count.warning {
+        color: #f59e0b;
+      }
+
+      .char-count.error {
+        color: #ef4444;
         font-weight: 600;
+      }
+
+      /* Button Styles */
+      .btn {
+        width: 100%;
+        padding: 16px 24px;
+        border: none;
+        border-radius: 10px;
+        font-size: 1rem;
+        font-weight: 600;
+        font-family: inherit;
         cursor: pointer;
-        transition: background-color 0.2s;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
       }
 
-      button:hover {
-        background-color: #333;
+      .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
       }
 
-      button:disabled {
-        background-color: #ccc;
+      .btn-primary:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 20px -10px rgba(102, 126, 234, 0.5);
+      }
+
+      .btn-primary:disabled {
+        opacity: 0.6;
         cursor: not-allowed;
+        transform: none;
       }
 
-      /* Success State Styles */
-      #success-screen {
+      .btn-success {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        color: white;
+      }
+
+      .btn-success:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 20px -10px rgba(16, 185, 129, 0.5);
+      }
+
+      /* Spinner */
+      .spinner {
+        width: 20px;
+        height: 20px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-top-color: white;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+
+      /* Screen States */
+      .screen {
         display: none;
+      }
+
+      .screen.active {
+        display: block;
+      }
+
+      /* Success Screen */
+      .success-icon {
+        width: 80px;
+        height: 80px;
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 24px;
+      }
+
+      .success-icon svg {
+        width: 40px;
+        height: 40px;
+        color: white;
+      }
+
+      .success-content {
         text-align: center;
       }
 
-      .code-display {
-        background-color: #e8f0fe;
-        color: #1967d2;
-        font-size: 48px;
+      .success-content h2 {
+        color: #1f2937;
+        font-size: 1.5rem;
+        margin: 0 0 12px 0;
         font-weight: 700;
-        padding: 20px;
-        border-radius: 8px;
-        margin: 20px 0;
-        letter-spacing: 5px;
       }
 
-      .instruction {
-        color: #666;
+      .success-content p {
+        color: #6b7280;
         line-height: 1.6;
+        margin: 0 0 8px 0;
       }
-      
-      .loader {
-        display: none;
-        margin-left: 10px;
+
+      .student-name {
+        display: inline-block;
+        background: #f3f4f6;
+        padding: 8px 16px;
+        border-radius: 8px;
+        font-weight: 600;
+        color: #374151;
+        margin: 16px 0 24px;
+      }
+
+      .divider {
+        height: 1px;
+        background: #e5e7eb;
+        margin: 32px 0;
+      }
+
+      .instructions {
+        background: #fef3c7;
+        border: 1px solid #fcd34d;
+        border-radius: 10px;
+        padding: 16px 20px;
+        margin-bottom: 24px;
+      }
+
+      .instructions h3 {
+        color: #92400e;
+        font-size: 0.9rem;
+        font-weight: 600;
+        margin: 0 0 8px 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .instructions p {
+        color: #78350f;
+        font-size: 0.875rem;
+        margin: 0;
+        line-height: 1.5;
+      }
+
+      /* Defense Screen */
+      .defense-header {
+        text-align: center;
+        margin-bottom: 24px;
+      }
+
+      .defense-header h2 {
+        color: #1f2937;
+        font-size: 1.25rem;
+        margin: 0 0 8px 0;
+      }
+
+      .defense-header p {
+        color: #6b7280;
+        margin: 0;
+        font-size: 0.9rem;
+      }
+
+      .widget-container {
+        background: #f9fafb;
+        border-radius: 12px;
+        padding: 24px;
+        min-height: 120px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .widget-container.loading {
+        color: #6b7280;
+        font-size: 0.9rem;
+      }
+
+      /* Status Badge */
+      .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .status-badge.ready {
+        background: #d1fae5;
+        color: #065f46;
+      }
+
+      .status-badge .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: currentColor;
+        animation: pulse 2s infinite;
+      }
+
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+      }
+
+      /* Back link */
+      .back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: #6b7280;
+        text-decoration: none;
+        font-size: 0.875rem;
+        margin-bottom: 16px;
+        transition: color 0.2s;
+      }
+
+      .back-link:hover {
+        color: #374151;
       }
     </style>
   </head>
   <body>
 
     <div class="container">
-      
-      <!-- Submission Form -->
-      <div id="submission-form">
+      <div class="header">
         <h1>Oral Defense Portal</h1>
-        <form id="paperForm" onsubmit="handleFormSubmit(event)">
-          
-          <div class="form-group">
-            <label for="name">Full Name</label>
-            <input type="text" id="name" name="name" placeholder="Enter your full name" required>
-          </div>
+        <p>Submit your essay and begin your defense</p>
+      </div>
 
-          <div class="form-group">
-            <label for="essay">Paste your Paper / Essay</label>
-            <textarea id="essay" name="essay" rows="12" placeholder="Paste the text of your paper here..." required oninput="updateCharCount()"></textarea>
-            <div id="char-count" style="font-size: 0.85em; color: #666; margin-top: 5px;">
-              <span id="current-chars">0</span> / <span id="max-chars">15000</span> characters
+      <div class="content">
+        <!-- Screen 1: Submission Form -->
+        <div id="screen-submit" class="screen active">
+          <form id="essayForm" onsubmit="handleSubmit(event)">
+            <div class="form-group">
+              <label for="name">Full Name</label>
+              <input
+                type="text"
+                id="name"
+                name="name"
+                placeholder="Enter your full name"
+                required
+                autocomplete="name"
+              >
             </div>
+
+            <div class="form-group">
+              <label for="essay">Your Essay</label>
+              <textarea
+                id="essay"
+                name="essay"
+                placeholder="Paste the complete text of your essay here..."
+                required
+                oninput="updateCharCount()"
+              ></textarea>
+              <div id="charCount" class="char-count">
+                <span id="currentChars">0</span>&nbsp;/&nbsp;<span id="maxChars">15,000</span> characters
+              </div>
+            </div>
+
+            <button type="submit" id="submitBtn" class="btn btn-primary">
+              <span id="submitText">Submit Essay</span>
+              <div id="submitSpinner" class="spinner" style="display: none;"></div>
+            </button>
+          </form>
+        </div>
+
+        <!-- Screen 2: Submission Success -->
+        <div id="screen-success" class="screen">
+          <div class="success-content">
+            <div class="success-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h2>Essay Submitted Successfully</h2>
+            <p>Your essay has been received and you're ready for your oral defense.</p>
+            <div class="student-name" id="displayName">Student Name</div>
           </div>
 
-          <button type="submit" id="submitBtn">
-            Submit Paper
-            <span class="loader">...</span>
+          <div class="divider"></div>
+
+          <div class="instructions">
+            <h3>
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Before You Begin
+            </h3>
+            <p>When the defense starts, the AI examiner will ask you to paste your essay into the chat. Please have it ready to copy. You'll then answer questions about your work verbally.</p>
+          </div>
+
+          <button onclick="startDefense()" class="btn btn-success">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+            </svg>
+            Start Oral Defense
           </button>
-        </form>
-      </div>
+        </div>
 
-      <!-- Success Screen (Hidden by default) -->
-      <div id="success-screen">
-        <h2 style="color: #2e7d32;">Submission Received</h2>
-        <p class="instruction">You are now ready for your oral defense.</p>
-        <p class="instruction">Please provide the following code to the AI Agent when asked:</p>
-        
-        <div class="code-display" id="code-output">----</div>
-        
-        <p style="margin-top: 30px; font-size: 0.9em; color: #888;">You may close this window.</p>
-        <button onclick="location.reload()" style="background:#fff; color:#333; border:1px solid #ddd; margin-top:10px;">Resubmit</button>
-      </div>
+        <!-- Screen 3: Defense in Progress -->
+        <div id="screen-defense" class="screen">
+          <a href="#" onclick="backToSuccess(event)" class="back-link">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+            Back
+          </a>
 
+          <div class="defense-header">
+            <span class="status-badge ready">
+              <span class="dot"></span>
+              Defense Active
+            </span>
+            <h2>Your Defense is in Progress</h2>
+            <p>Speak clearly and answer the examiner's questions about your essay.</p>
+          </div>
+
+          <div id="widgetContainer" class="widget-container loading">
+            Loading voice agent...
+          </div>
+        </div>
+      </div>
     </div>
 
-    <script>
-      const MAX_CHARS = 15000; // Must match Config sheet value
+    <script src="https://unpkg.com/@elevenlabs/convai-widget-embed" async type="text/javascript"></script>
 
+    <script>
+      // Configuration
+      const MAX_CHARS = 15000;
+      const AGENT_ID = "agent_0101keckvrb9ff8bgfra3dd2v563";
+
+      // State
+      let currentSessionId = null;
+      let studentName = null;
+
+      // Character count
       function updateCharCount() {
         const essay = document.getElementById('essay');
-        const currentChars = document.getElementById('current-chars');
-        const charCountDiv = document.getElementById('char-count');
+        const currentChars = document.getElementById('currentChars');
+        const charCountDiv = document.getElementById('charCount');
         const count = essay.value.length;
 
-        currentChars.innerText = count.toLocaleString();
+        currentChars.textContent = count.toLocaleString();
 
+        charCountDiv.classList.remove('warning', 'error');
         if (count > MAX_CHARS) {
-          charCountDiv.style.color = '#d32f2f';
-          currentChars.style.fontWeight = 'bold';
+          charCountDiv.classList.add('error');
         } else if (count > MAX_CHARS * 0.9) {
-          charCountDiv.style.color = '#f57c00';
-          currentChars.style.fontWeight = 'normal';
-        } else {
-          charCountDiv.style.color = '#666';
-          currentChars.style.fontWeight = 'normal';
+          charCountDiv.classList.add('warning');
         }
       }
 
-      function handleFormSubmit(event) {
+      // Form submission
+      function handleSubmit(event) {
         event.preventDefault();
 
-        const btn = document.getElementById('submitBtn');
         const essay = document.getElementById('essay').value;
+        const name = document.getElementById('name').value;
 
-        // Client-side length validation
+        // Validate length
         if (essay.length > MAX_CHARS) {
-          alert(`Your paper exceeds the maximum length of ${MAX_CHARS.toLocaleString()} characters. Please shorten it and try again.`);
+          alert(`Your essay exceeds the maximum length of ${MAX_CHARS.toLocaleString()} characters. Please shorten it and try again.`);
           return;
         }
 
-        // UI Loading State
-        btn.disabled = true;
-        btn.innerText = "Processing...";
+        // Show loading state
+        const submitBtn = document.getElementById('submitBtn');
+        const submitText = document.getElementById('submitText');
+        const submitSpinner = document.getElementById('submitSpinner');
 
-        // Collect Data
-        const formData = {
-          name: document.getElementById('name').value,
-          essay: essay
-        };
+        submitBtn.disabled = true;
+        submitText.textContent = 'Submitting...';
+        submitSpinner.style.display = 'block';
 
-        // Send to Google Apps Script
+        // Submit to backend
         google.script.run
-          .withSuccessHandler(onSuccess)
-          .withFailureHandler(onFailure)
-          .processSubmission(formData);
+          .withSuccessHandler(onSubmitSuccess)
+          .withFailureHandler(onSubmitError)
+          .processSubmission({ name: name, essay: essay });
       }
 
-      function onSuccess(response) {
+      function onSubmitSuccess(response) {
         if (response.status === "success") {
-          // Hide Form, Show Success
-          document.getElementById('submission-form').style.display = 'none';
-          document.getElementById('success-screen').style.display = 'block';
-          document.getElementById('code-output').innerText = response.code;
+          currentSessionId = response.sessionId;
+          studentName = document.getElementById('name').value;
+
+          // Update display
+          document.getElementById('displayName').textContent = studentName;
+
+          // Switch to success screen
+          showScreen('screen-success');
         } else {
           alert("Error: " + response.message);
-          resetBtn();
+          resetSubmitButton();
         }
       }
 
-      function onFailure(error) {
-        alert("Server Error: " + error.message);
-        resetBtn();
+      function onSubmitError(error) {
+        alert("Server error: " + error.message);
+        resetSubmitButton();
       }
 
-      function resetBtn() {
-        const btn = document.getElementById('submitBtn');
-        btn.disabled = false;
-        btn.innerText = "Submit Paper";
+      function resetSubmitButton() {
+        const submitBtn = document.getElementById('submitBtn');
+        const submitText = document.getElementById('submitText');
+        const submitSpinner = document.getElementById('submitSpinner');
+
+        submitBtn.disabled = false;
+        submitText.textContent = 'Submit Essay';
+        submitSpinner.style.display = 'none';
       }
+
+      // Start defense
+      function startDefense() {
+        showScreen('screen-defense');
+        initializeWidget();
+      }
+
+      function backToSuccess(event) {
+        event.preventDefault();
+        showScreen('screen-success');
+
+        // Remove widget if it exists
+        const container = document.getElementById('widgetContainer');
+        container.innerHTML = '<span>Loading voice agent...</span>';
+        container.classList.add('loading');
+      }
+
+      // Initialize 11Labs widget with session_id
+      function initializeWidget() {
+        const container = document.getElementById('widgetContainer');
+        container.innerHTML = '';
+        container.classList.remove('loading');
+
+        // Create the widget element
+        const widget = document.createElement('elevenlabs-convai');
+        widget.setAttribute('agent-id', AGENT_ID);
+
+        // Pass session_id as dynamic variable for webhook correlation
+        widget.setAttribute('dynamic-variables', JSON.stringify({
+          session_id: currentSessionId,
+          student_name: studentName
+        }));
+
+        container.appendChild(widget);
+      }
+
+      // Screen management
+      function showScreen(screenId) {
+        document.querySelectorAll('.screen').forEach(screen => {
+          screen.classList.remove('active');
+        });
+        document.getElementById(screenId).classList.add('active');
+      }
+
+      // Initialize
+      document.addEventListener('DOMContentLoaded', function() {
+        document.getElementById('maxChars').textContent = MAX_CHARS.toLocaleString();
+      });
     </script>
-    
-    <elevenlabs-convai agent-id="agent_0101keckvrb9ff8bgfra3dd2v563"></elevenlabs-convai>
-<script src="https://unpkg.com/@elevenlabs/convai-widget-embed" async type="text/javascript"></script>
 
   </body>
 </html>
