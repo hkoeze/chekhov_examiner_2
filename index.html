@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <!-- Using a simple font and clean CSS for a minimalist academic look -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+      body {
+        font-family: 'Inter', sans-serif;
+        background-color: #f4f4f9;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        margin: 0;
+        color: #333;
+      }
+
+      .container {
+        background: white;
+        padding: 40px;
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+        width: 100%;
+        max-width: 600px;
+      }
+
+      h1 {
+        margin-top: 0;
+        font-weight: 600;
+        color: #1a1a1a;
+        text-align: center;
+        margin-bottom: 30px;
+      }
+
+      .form-group {
+        margin-bottom: 20px;
+      }
+
+      label {
+        display: block;
+        font-size: 0.9em;
+        font-weight: 600;
+        margin-bottom: 8px;
+        color: #555;
+      }
+
+      input[type="text"] {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 16px;
+        box-sizing: border-box; /* Ensures padding doesn't affect width */
+      }
+
+      textarea {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 14px;
+        line-height: 1.5;
+        resize: vertical;
+        box-sizing: border-box;
+        font-family: 'Inter', sans-serif;
+      }
+
+      textarea:focus, input:focus {
+        outline: none;
+        border-color: #4a90e2;
+        box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+      }
+
+      button {
+        width: 100%;
+        background-color: #1a1a1a;
+        color: white;
+        padding: 15px;
+        border: none;
+        border-radius: 6px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background-color 0.2s;
+      }
+
+      button:hover {
+        background-color: #333;
+      }
+
+      button:disabled {
+        background-color: #ccc;
+        cursor: not-allowed;
+      }
+
+      /* Success State Styles */
+      #success-screen {
+        display: none;
+        text-align: center;
+      }
+
+      .code-display {
+        background-color: #e8f0fe;
+        color: #1967d2;
+        font-size: 48px;
+        font-weight: 700;
+        padding: 20px;
+        border-radius: 8px;
+        margin: 20px 0;
+        letter-spacing: 5px;
+      }
+
+      .instruction {
+        color: #666;
+        line-height: 1.6;
+      }
+      
+      .loader {
+        display: none;
+        margin-left: 10px;
+      }
+    </style>
+  </head>
+  <body>
+
+    <div class="container">
+      
+      <!-- Submission Form -->
+      <div id="submission-form">
+        <h1>Oral Defense Portal</h1>
+        <form id="paperForm" onsubmit="handleFormSubmit(event)">
+          
+          <div class="form-group">
+            <label for="name">Full Name</label>
+            <input type="text" id="name" name="name" placeholder="Enter your full name" required>
+          </div>
+
+          <div class="form-group">
+            <label for="essay">Paste your Paper / Essay</label>
+            <textarea id="essay" name="essay" rows="12" placeholder="Paste the text of your paper here..." required oninput="updateCharCount()"></textarea>
+            <div id="char-count" style="font-size: 0.85em; color: #666; margin-top: 5px;">
+              <span id="current-chars">0</span> / <span id="max-chars">15000</span> characters
+            </div>
+          </div>
+
+          <button type="submit" id="submitBtn">
+            Submit Paper
+            <span class="loader">...</span>
+          </button>
+        </form>
+      </div>
+
+      <!-- Success Screen (Hidden by default) -->
+      <div id="success-screen">
+        <h2 style="color: #2e7d32;">Submission Received</h2>
+        <p class="instruction">You are now ready for your oral defense.</p>
+        <p class="instruction">Please provide the following code to the AI Agent when asked:</p>
+        
+        <div class="code-display" id="code-output">----</div>
+        
+        <p style="margin-top: 30px; font-size: 0.9em; color: #888;">You may close this window.</p>
+        <button onclick="location.reload()" style="background:#fff; color:#333; border:1px solid #ddd; margin-top:10px;">Resubmit</button>
+      </div>
+
+    </div>
+
+    <script>
+      const MAX_CHARS = 15000; // Must match Config sheet value
+
+      function updateCharCount() {
+        const essay = document.getElementById('essay');
+        const currentChars = document.getElementById('current-chars');
+        const charCountDiv = document.getElementById('char-count');
+        const count = essay.value.length;
+
+        currentChars.innerText = count.toLocaleString();
+
+        if (count > MAX_CHARS) {
+          charCountDiv.style.color = '#d32f2f';
+          currentChars.style.fontWeight = 'bold';
+        } else if (count > MAX_CHARS * 0.9) {
+          charCountDiv.style.color = '#f57c00';
+          currentChars.style.fontWeight = 'normal';
+        } else {
+          charCountDiv.style.color = '#666';
+          currentChars.style.fontWeight = 'normal';
+        }
+      }
+
+      function handleFormSubmit(event) {
+        event.preventDefault();
+
+        const btn = document.getElementById('submitBtn');
+        const essay = document.getElementById('essay').value;
+
+        // Client-side length validation
+        if (essay.length > MAX_CHARS) {
+          alert(`Your paper exceeds the maximum length of ${MAX_CHARS.toLocaleString()} characters. Please shorten it and try again.`);
+          return;
+        }
+
+        // UI Loading State
+        btn.disabled = true;
+        btn.innerText = "Processing...";
+
+        // Collect Data
+        const formData = {
+          name: document.getElementById('name').value,
+          essay: essay
+        };
+
+        // Send to Google Apps Script
+        google.script.run
+          .withSuccessHandler(onSuccess)
+          .withFailureHandler(onFailure)
+          .processSubmission(formData);
+      }
+
+      function onSuccess(response) {
+        if (response.status === "success") {
+          // Hide Form, Show Success
+          document.getElementById('submission-form').style.display = 'none';
+          document.getElementById('success-screen').style.display = 'block';
+          document.getElementById('code-output').innerText = response.code;
+        } else {
+          alert("Error: " + response.message);
+          resetBtn();
+        }
+      }
+
+      function onFailure(error) {
+        alert("Server Error: " + error.message);
+        resetBtn();
+      }
+
+      function resetBtn() {
+        const btn = document.getElementById('submitBtn');
+        btn.disabled = false;
+        btn.innerText = "Submit Paper";
+      }
+    </script>
+    
+    <elevenlabs-convai agent-id="agent_0101keckvrb9ff8bgfra3dd2v563"></elevenlabs-convai>
+<script src="https://unpkg.com/@elevenlabs/convai-widget-embed" async type="text/javascript"></script>
+
+  </body>
+</html>
