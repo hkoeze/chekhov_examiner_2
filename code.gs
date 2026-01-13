@@ -355,10 +355,10 @@ function processSubmission(formObject) {
 
     sheet.appendRow(newRow);
 
-    // Format the new row: clip text and set compact height
+    // Format the new row: clip text and set compact height (2 lines max)
     const newRowNum = sheet.getLastRow();
     sheet.getRange(newRowNum, 1, 1, 13).setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
-    sheet.setRowHeight(newRowNum, 21);
+    sheet.setRowHeightsForced(newRowNum, 1, 42);
 
     sheetLog("processSubmission", "Essay submitted", {
       studentName: formObject.name,
@@ -1015,12 +1015,12 @@ function formatDatabaseSheet() {
     return;
   }
 
-  // Get the data range to format
-  const lastRow = Math.max(sheet.getLastRow(), 1);
+  // Format a large range to cover future submissions (1000 rows)
+  const maxRows = 1000;
   const lastCol = 13; // We have 13 columns defined in COL
 
   // Set all cells to CLIP wrap strategy (no wrapping, no overflow)
-  const fullRange = sheet.getRange(1, 1, lastRow, lastCol);
+  const fullRange = sheet.getRange(1, 1, maxRows, lastCol);
   fullRange.setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
 
   // Set compact column widths (in pixels)
@@ -1045,13 +1045,11 @@ function formatDatabaseSheet() {
     sheet.setColumnWidth(parseInt(col), width);
   }
 
-  // Set compact row height for all rows (21 pixels is standard single-line height)
-  if (lastRow > 0) {
-    sheet.setRowHeightsForced(1, lastRow, 21);
-  }
+  // Set compact row height for all rows (42 pixels = 2 lines max)
+  sheet.setRowHeightsForced(1, maxRows, 42);
 
   sheetLog("formatDatabaseSheet", "Formatting applied", {
-    rows: lastRow,
+    rows: maxRows,
     columns: lastCol
   });
 }
