@@ -371,33 +371,30 @@
 
       .complete-content p {
         color: #6b7280;
-        line-height: 1.7;
-        margin: 0 0 12px 0;
-        font-size: 1rem;
+        line-height: 1.6;
+        margin: 0 0 8px 0;
       }
 
-      .complete-content .thank-you-message {
-        color: #374151;
+      .complete-content .thank-you {
         font-size: 1.1rem;
+        color: #374151;
         margin-top: 24px;
       }
 
-      .complete-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 10px 20px;
-        background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
-        border-radius: 25px;
-        font-size: 0.9rem;
-        font-weight: 600;
-        color: #065f46;
-        margin: 24px 0;
+      .info-box {
+        background: #eff6ff;
+        border: 1px solid #bfdbfe;
+        border-radius: 10px;
+        padding: 16px 20px;
+        margin-top: 24px;
+        text-align: left;
       }
 
-      .complete-badge svg {
-        width: 18px;
-        height: 18px;
+      .info-box p {
+        color: #1e40af;
+        font-size: 0.875rem;
+        margin: 0;
+        line-height: 1.5;
       }
     </style>
   </head>
@@ -503,20 +500,14 @@
                 <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
+            <h2>Defense Complete</h2>
+            <p>Your oral defense has been recorded and submitted for review.</p>
+            <div class="student-name" id="completeDisplayName">Student Name</div>
+            <p class="thank-you">Thank you for completing your defense!</p>
 
-            <div class="complete-badge">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-              </svg>
-              Defense Complete
+            <div class="info-box">
+              <p>Your instructor will review your essay and defense transcript. Grades will be posted according to your course schedule. You may now close this window.</p>
             </div>
-
-            <h2>Thank You for Your Defense!</h2>
-
-            <p>Your oral defense has been successfully completed and recorded.</p>
-            <p>Your instructor will review your submission and defense transcript, and your grade will be available soon.</p>
-
-            <p class="thank-you-message">You may now close this window.</p>
           </div>
         </div>
       </div>
@@ -532,6 +523,7 @@
       // State
       let currentSessionId = null;
       let studentName = null;
+      let defenseActive = false;
 
       // Character count
       function updateCharCount() {
@@ -612,8 +604,20 @@
 
       // Start defense
       function startDefense() {
+        defenseActive = true;
         showScreen('screen-defense');
         initializeWidget();
+      }
+
+      function backToSuccess(event) {
+        event.preventDefault();
+        defenseActive = false;
+        showScreen('screen-success');
+
+        // Remove widget if it exists
+        const container = document.getElementById('widgetContainer');
+        container.innerHTML = '<span>Loading voice agent...</span>';
+        container.classList.add('loading');
       }
 
       // Initialize 11Labs widget with session_id
@@ -632,32 +636,41 @@
           student_name: studentName
         }));
 
-        // Listen for call end event from the widget
-        widget.addEventListener('elevenlabs-convai:call', (event) => {
-          // The call event includes status updates
-          if (event.detail && (event.detail.status === 'ended' || event.detail.status === 'disconnected')) {
-            showDefenseComplete();
-          }
-        });
-
-        // Also listen for the conversation end event
-        widget.addEventListener('elevenlabs-convai:conversation', (event) => {
-          if (event.detail && event.detail.status === 'ended') {
-            showDefenseComplete();
-          }
-        });
+        // Listen for call end events from the widget
+        widget.addEventListener('elevenlabs-convai:call', handleCallEvent);
+        widget.addEventListener('elevenlabs-convai:conversation', handleCallEvent);
 
         container.appendChild(widget);
       }
 
-      // Show defense complete screen
+      // Handle call/conversation events from the widget
+      function handleCallEvent(event) {
+        console.log('Widget event:', event.type, event.detail);
+
+        // Check for call ended status
+        const detail = event.detail || {};
+        if (detail.status === 'ended' ||
+            detail.status === 'disconnected' ||
+            event.type.includes('ended') ||
+            event.type.includes('disconnected')) {
+          showDefenseComplete();
+        }
+      }
+
+      // Show the defense complete screen
       function showDefenseComplete() {
+        // Only show if defense was active
+        if (!defenseActive) return;
+        defenseActive = false;
+
+        // Update the student name on the complete screen
+        document.getElementById('completeDisplayName').textContent = studentName;
+
         // Clear the widget container
         const container = document.getElementById('widgetContainer');
         container.innerHTML = '';
-        container.classList.add('loading');
 
-        // Navigate to completion screen
+        // Show the completion screen
         showScreen('screen-complete');
       }
 
@@ -672,6 +685,15 @@
       // Initialize
       document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('maxChars').textContent = MAX_CHARS.toLocaleString();
+
+        // Also listen for widget events at the document level (backup)
+        document.addEventListener('elevenlabs-convai:call', handleCallEvent);
+        document.addEventListener('elevenlabs-convai:conversation', handleCallEvent);
+
+        // Listen for the specific call-ended event pattern
+        document.addEventListener('elevenlabs-convai:call-ended', function() {
+          showDefenseComplete();
+        });
       });
     </script>
 
