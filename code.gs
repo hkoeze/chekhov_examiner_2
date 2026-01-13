@@ -83,8 +83,8 @@ const COL = {
   DEFENSE_STARTED: 6,
   DEFENSE_ENDED: 7,
   TRANSCRIPT: 8,
-  CLAUDE_GRADE: 9,
-  CLAUDE_COMMENTS: 10,
+  AI_MULTIPLIER: 9,   // Renamed from CLAUDE_GRADE
+  AI_COMMENT: 10,     // Renamed from CLAUDE_COMMENTS
   INSTRUCTOR_NOTES: 11,
   FINAL_GRADE: 12,
   CONVERSATION_ID: 13  // New: stores 11Labs conversation_id as backup
@@ -553,10 +553,10 @@ function updateStudentStatus(sessionId, newStatus, additionalFields = {}) {
         sheet.getRange(row, COL.TRANSCRIPT).setValue(additionalFields.transcript);
       }
       if (additionalFields.grade) {
-        sheet.getRange(row, COL.CLAUDE_GRADE).setValue(additionalFields.grade);
+        sheet.getRange(row, COL.AI_MULTIPLIER).setValue(additionalFields.grade);
       }
       if (additionalFields.comments) {
-        sheet.getRange(row, COL.CLAUDE_COMMENTS).setValue(additionalFields.comments);
+        sheet.getRange(row, COL.AI_COMMENT).setValue(additionalFields.comments);
       }
       if (additionalFields.conversationId) {
         sheet.getRange(row, COL.CONVERSATION_ID).setValue(additionalFields.conversationId);
@@ -1017,14 +1017,14 @@ function formatDatabaseSheet() {
 
   // Format a large range to cover future submissions (1000 rows)
   const maxRows = 1000;
-  const lastCol = 13; // We have 13 columns defined in COL
+  // Get actual number of columns in sheet (or use a reasonable max)
+  const lastCol = Math.max(sheet.getLastColumn(), 13, 26); // At least 26 columns (A-Z)
 
   // Set all cells to CLIP wrap strategy (no wrapping, no overflow)
   const fullRange = sheet.getRange(1, 1, maxRows, lastCol);
   fullRange.setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
 
-  // Set compact column widths (in pixels)
-  // Narrower widths for long-text columns, reasonable widths for others
+  // Set compact column widths (in pixels) for known columns
   const columnWidths = {
     [COL.TIMESTAMP]: 130,        // Date/time
     [COL.STUDENT_NAME]: 120,     // Names
@@ -1034,8 +1034,8 @@ function formatDatabaseSheet() {
     [COL.DEFENSE_STARTED]: 130,  // Date/time
     [COL.DEFENSE_ENDED]: 130,    // Date/time
     [COL.TRANSCRIPT]: 150,       // Long text - keep narrow
-    [COL.CLAUDE_GRADE]: 80,      // Numeric grade
-    [COL.CLAUDE_COMMENTS]: 150,  // Long text - keep narrow
+    [COL.AI_MULTIPLIER]: 80,     // Numeric grade
+    [COL.AI_COMMENT]: 150,       // Long text - keep narrow
     [COL.INSTRUCTOR_NOTES]: 120, // Notes
     [COL.FINAL_GRADE]: 80,       // Grade
     [COL.CONVERSATION_ID]: 100   // ID (clipped)
