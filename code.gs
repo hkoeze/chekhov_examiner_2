@@ -355,6 +355,11 @@ function processSubmission(formObject) {
 
     sheet.appendRow(newRow);
 
+    // Format the new row: clip text and set compact height
+    const newRowNum = sheet.getLastRow();
+    sheet.getRange(newRowNum, 1, 1, 13).setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
+    sheet.setRowHeight(newRowNum, 21);
+
     sheetLog("processSubmission", "Essay submitted", {
       studentName: formObject.name,
       sessionId: sessionId,
@@ -996,6 +1001,62 @@ Format your response with clear headings for each rubric element.`;
 // ===========================================
 
 /**
+ * Formats the Database sheet for better readability:
+ * - Sets all cells to clip overflow text (no wrapping or overflow)
+ * - Sets compact column widths appropriate for each data type
+ * - Sets compact row heights to show more entries
+ */
+function formatDatabaseSheet() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(SUBMISSIONS_SHEET);
+
+  if (!sheet) {
+    sheetLog("formatDatabaseSheet", "Database sheet not found", {});
+    return;
+  }
+
+  // Get the data range to format
+  const lastRow = Math.max(sheet.getLastRow(), 1);
+  const lastCol = 13; // We have 13 columns defined in COL
+
+  // Set all cells to CLIP wrap strategy (no wrapping, no overflow)
+  const fullRange = sheet.getRange(1, 1, lastRow, lastCol);
+  fullRange.setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
+
+  // Set compact column widths (in pixels)
+  // Narrower widths for long-text columns, reasonable widths for others
+  const columnWidths = {
+    [COL.TIMESTAMP]: 130,        // Date/time
+    [COL.STUDENT_NAME]: 120,     // Names
+    [COL.SESSION_ID]: 100,       // UUID (clipped)
+    [COL.PAPER]: 150,            // Long text - keep narrow
+    [COL.STATUS]: 110,           // Status values
+    [COL.DEFENSE_STARTED]: 130,  // Date/time
+    [COL.DEFENSE_ENDED]: 130,    // Date/time
+    [COL.TRANSCRIPT]: 150,       // Long text - keep narrow
+    [COL.CLAUDE_GRADE]: 80,      // Numeric grade
+    [COL.CLAUDE_COMMENTS]: 150,  // Long text - keep narrow
+    [COL.INSTRUCTOR_NOTES]: 120, // Notes
+    [COL.FINAL_GRADE]: 80,       // Grade
+    [COL.CONVERSATION_ID]: 100   // ID (clipped)
+  };
+
+  for (const [col, width] of Object.entries(columnWidths)) {
+    sheet.setColumnWidth(parseInt(col), width);
+  }
+
+  // Set compact row height for all rows (21 pixels is standard single-line height)
+  if (lastRow > 0) {
+    sheet.setRowHeightsForced(1, lastRow, 21);
+  }
+
+  sheetLog("formatDatabaseSheet", "Formatting applied", {
+    rows: lastRow,
+    columns: lastCol
+  });
+}
+
+/**
  * Includes HTML files in other HTML files (standard Apps Script pattern)
  */
 function include(filename) {
@@ -1021,14 +1082,19 @@ function gradeAllPending() {
 }
 
 /**
- * Creates a custom menu in the spreadsheet
+ * Creates a custom menu in the spreadsheet and applies formatting
  */
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu('Oral Defense')
     .addItem('Grade All Pending', 'gradeAllPending')
     .addItem('Refresh Status Counts', 'showStatusCounts')
+    .addSeparator()
+    .addItem('Format Database Sheet', 'formatDatabaseSheet')
     .addToUi();
+
+  // Auto-format the database sheet on open
+  formatDatabaseSheet();
 }
 
 /**
